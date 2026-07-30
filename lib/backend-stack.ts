@@ -4,6 +4,10 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 
 export class BackendStack extends cdk.Stack{
   constructor(scope: Construct, id: string, props?:cdk.StackProps) {
@@ -64,7 +68,7 @@ export class BackendStack extends cdk.Stack{
 
     const userPoolClient = userPool.addClient('VendorAppClient');
 
-    // API Gateway
+    // API Gateway + authorizer
     const api = new apigateway.RestApi(this, 'VendorApi', {
       restApiName: 'Vendor Service',
       defaultCorsPreflightOptions:{
@@ -90,12 +94,44 @@ export class BackendStack extends cdk.Stack{
     vendors.addMethod('GET', new apigateway.LambdaIntegration(getVendorsLambda), authOptions);
     vendors.addMethod('DELETE', new apigateway.LambdaIntegration(deleteVendorsLambda), authOptions)
 
-    // Outputs
-    new cdk.CfnOutput(this, 'ApiEndpoint', {
-      value: api.url
+    // S3 bucket (frontend files)
+    const siteBucket = new s3.Bucket(this, 'VendorSiteBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
     })
 
+    // CloudFront Distribution (https + cdn)
+    const distribution = new cloudfront.Distribution(this, 'SiteDistribution', {
+      defaultBehavior:{
+        origin: new origins.S3StaticWebsiteOrigin(siteBucket), // S3Origin is deprecated
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      },
+      defaultRootObject: 'index.html',
+      errorResponses: [
+        {
+          // redirect all 404s back to index.html so React can handle routing
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html'
+        }
+      ]
+    });
+
+    // deploy frontend files to s3
+    new s3deploy.BucketDeployment(this, 'DeployWebsite', {
+      sources: [s3deploy.Source.asset('../frontend/out')],
+      destinationBucket: siteBucket,
+      distribution,
+      distributionPaths: ['/*'], // clears cloudfront cache on eveery deploy
+    })
+
+    // Outputs
+    new cdk.CfnOutput(this, 'ApiEndpoint', { value: api.url })
     new cdk.CfnOutput(this, 'UserPoolId', {value: userPool.userPoolId});
-    new cdk.CfnOutput(this, 'UserPoolClientId', {value: userPoolClient.userPoolClientId})
+    new cdk.CfnOutput(this, 'UserPoolClientId', {value: userPoolClient.userPoolClientId});
+    new cdk.CfnOutput(this, 'CloudFrontURL', {
+      value: `https://${distribution.distributionDomainName}`
+    })
   }
 }
