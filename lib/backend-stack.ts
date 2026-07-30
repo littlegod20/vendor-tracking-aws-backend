@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
 export class BackendStack extends cdk.Stack{
@@ -44,6 +45,25 @@ export class BackendStack extends cdk.Stack{
     vendorTable.grantReadData(getVendorsLambda);
     vendorTable.grantWriteData(deleteVendorsLambda)
 
+    // cognito user pool
+    const userPool = new cognito.UserPool(this, 'VendorUserPool', {
+      selfSignUpEnabled: true,
+      signInAliases: {email: true},
+      autoVerify: {email: true},
+      userVerification: {
+        emailStyle: cognito.VerificationEmailStyle.CODE
+      }
+    });
+
+    // required to host cognito's internal auth endpoints
+    userPool.addDomain('VendorUserPoolDomain', {
+      cognitoDomain: {
+        domainPrefix: `vendor-tracker-${this.account}`
+      }
+    })
+
+    const userPoolClient = userPool.addClient('VendorAppClient');
+
     // API Gateway
     const api = new apigateway.RestApi(this, 'VendorApi', {
       restApiName: 'Vendor Service',
@@ -54,14 +74,28 @@ export class BackendStack extends cdk.Stack{
       }
     });
 
+    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(
+      this,
+      'VendorAuthorizer',
+      { cognitoUserPools : [userPool]}
+    )
+
+    const authOptions = {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO
+    }
+
     const vendors = api.root.addResource('vendors');
-    vendors.addMethod('POST', new apigateway.LambdaIntegration(createVendorLambda));
-    vendors.addMethod('GET', new apigateway.LambdaIntegration(getVendorsLambda));
-    vendors.addMethod('DELETE', new apigateway.LambdaIntegration(deleteVendorsLambda))
+    vendors.addMethod('POST', new apigateway.LambdaIntegration(createVendorLambda), authOptions);
+    vendors.addMethod('GET', new apigateway.LambdaIntegration(getVendorsLambda), authOptions);
+    vendors.addMethod('DELETE', new apigateway.LambdaIntegration(deleteVendorsLambda), authOptions)
 
     // Outputs
     new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: api.url
     })
+
+    new cdk.CfnOutput(this, 'UserPoolId', {value: userPool.userPoolId});
+    new cdk.CfnOutput(this, 'UserPoolClientId', {value: userPoolClient.userPoolClientId})
   }
 }
