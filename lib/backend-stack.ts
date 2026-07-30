@@ -104,7 +104,7 @@ export class BackendStack extends cdk.Stack{
     // CloudFront Distribution (https + cdn)
     const distribution = new cloudfront.Distribution(this, 'SiteDistribution', {
       defaultBehavior:{
-        origin: new origins.S3StaticWebsiteOrigin(siteBucket), // S3Origin is deprecated
+        origin: new origins.S3Origin(siteBucket), // S3Origin is deprecated
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
       defaultRootObject: 'index.html',
