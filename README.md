@@ -2,6 +2,8 @@
 
 AWS CDK (TypeScript) stack that provisions the Vendor Tracker API, auth, data store, and static frontend hosting.
 
+**Frontend:** [littlegod20/vendor-tracking-aws-frontend](https://github.com/littlegod20/vendor-tracking-aws-frontend.git)
+
 ## What this stack creates
 
 | Resource | Purpose |
@@ -256,6 +258,3 @@ npx cdk destroy
 | CloudFront shows old UI | Redeploy after rebuild so invalidation runs; wait for distribution |
 | CORS errors from localhost | Confirm API CORS allows your methods/headers; check preflight |
 
-## Related
-
-- Frontend app: [`../frontend/README.md`](../frontend/README.md)
