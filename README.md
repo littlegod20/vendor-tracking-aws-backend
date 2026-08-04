@@ -2,6 +2,7 @@
 
 AWS CDK (TypeScript) stack that provisions the Vendor Tracker API, auth, data store, and static frontend hosting.
 
+## Related Repository
 **Frontend:** [littlegod20/vendor-tracking-aws-frontend](https://github.com/littlegod20/vendor-tracking-aws-frontend.git)
 
 ## What this stack creates
